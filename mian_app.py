@@ -2,6 +2,7 @@ import json
 import requests
 from parsel import Selector
 from typing import List, Dict, Any
+import re
 
 def scrape_dubizzle_properties(url: str):
     """
@@ -59,10 +60,27 @@ def scrape_dubizzle_properties(url: str):
             property_url_element = listing.css('a::attr(href)').get('')
             property_url = f"https://www.dubizzle.com.om{property_url_element}" if property_url_element else ''
             
-            # Extract image URL
-            image_url = listing.css('picture._5a8a8551 img::attr(src)').get('')
+            # Extract property ID from URL
+            property_id = None
+            if property_url_element:
+                id_match = re.search(r'ID(\d+)\.html', property_url_element)
+                if id_match:
+                    property_id = id_match.group(1)
+            
+            # Get contact information if property ID is available
+            contact_info = {}
+            if property_id:
+                contact_api_url = f"https://www.dubizzle.com.om/api/listing/{property_id}/contactInfo/"
+                try:
+                    print(f"Fetching the contact number using {contact_api_url}")
+                    contact_response = requests.get(contact_api_url)
+                    if contact_response.status_code == 200:
+                        contact_info = contact_response.json()
+                except Exception as e:
+                    print(f"Error fetching contact info for property {property_id}: {e}")
             
             property_data = {
+                'property_id': property_id,
                 'price': price,
                 'title': title,
                 'description': description,
@@ -73,13 +91,15 @@ def scrape_dubizzle_properties(url: str):
                 'date_posted': date_posted,
                 'seller_name': seller_name,
                 'property_url': property_url,
-                'image_url': image_url
+                'contact_info': {
+                    "phone_number": contact_info.get("mobile"), 
+                    "whatsapp_number": contact_info.get("whatsapp"),
+                    "name": contact_info.get("name")
+                }
             }
 
-            # Make a request to bring the contact number
-
             properties.append(property_data)
-            print(f"Scraped: {title}")
+            # print(f"Scraped: {title}")
             
         except Exception as e:
             print(f"Error extracting property data: {e}")
